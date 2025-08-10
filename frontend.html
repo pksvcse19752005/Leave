@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Attendance Management - Secure Admin Login</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f5f6fa; margin:0;
+    }
+    .container {
+      max-width: 1030px;
+      margin: 34px auto;
+      background: #fff;
+      padding: 22px 8px;
+      border-radius: 13px;
+      box-shadow: 0 2px 16px #b2bec3;
+      display: none;
+    }
+    h1 { text-align: center; color: #273c75; margin-bottom:11px;}
+    .attendance-bar {
+      display: flex; flex-wrap: wrap;
+      align-items: center; justify-content: flex-start;
+      gap: 18px; margin-bottom: 13px;
+    }
+    label { color: #34495e; font-size: 1.07rem; }
+    input[type="date"], input[type="text"], input[type="password"] {
+      padding: 6px 10px;
+      border: 1px solid #b2bec3;
+      border-radius: 6px;
+      font-size: 1rem;
+    }
+    button#saveBtn {
+      background: #00a8ff;
+      color: #fff;
+      padding: 10px 28px;
+      border: none;
+      border-radius: 7px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      margin-left:15px;
+      font-weight:500;
+      box-shadow: 0 2px 10px #b2bec3;
+    }
+    button.export-btn {
+      background: #00b894; color: #fff;
+      font-weight: bold; padding: 8px 19px;
+      border: none; border-radius: 6px;
+      font-size:1.05rem; cursor:pointer;
+      margin-bottom:10px; float:right;
+      box-shadow:0 2px 8px #dfe6e9;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td { padding: 15px 9px; text-align: left; font-size: 1.02rem; }
+    th { background: #f1c40f; color: #273c75; letter-spacing: 1px;}
+    /* Use only yellow and white alternating rows */
+    tr.c0 { background: #fffde7; }
+    tr.c1 { background: #ffffff; }
+    .status-btn {
+      display:inline-block; border:none;
+      padding:8px 16px; margin:0 2px; border-radius:5px;
+      font-size:1.03rem; font-weight: bold; cursor:pointer;
+      transition: all 0.16s; outline:none;
+    }
+    .status-present  { background:#00b894; color:#fff;}
+    .status-absent   { background:#e74c3c; color:#fff;}
+    .status-late     { background: #fdcb6e; color:#222;}
+    .status-selected { border:3px solid #f1c40f; box-shadow:0 2px 7px #b2bec3;}
+    #filterResults table { border-collapse: collapse; margin-top: 7px; width:100%; }
+    #filterResults th, #filterResults td { padding: 8px 7px; font-size: 1.02rem; border-bottom:1px solid #dfe6e9; text-align:left;}
+    #filterResults th { background: #f1c40f; color: #273c75;}
+    #loginPanel {
+      max-width:400px;margin:35px auto;background:#fffce6;
+      border-radius:10px;box-shadow:0 2px 8px #fdc7c7;
+      padding:20px;display:block;
+    }
+    #logoutBtn {
+      padding: 5px 14px; font-size:1rem; background:#d63031; color:#fff; border:none; border-radius: 5px; cursor:pointer; margin-bottom:10px;
+      float:left;
+    }
+    @media (max-width:600px){
+      .container{padding:5px;}
+      th, td{font-size:0.97rem;}
+      .attendance-bar{font-size:0.96rem;}
+      button#saveBtn, .export-btn{font-size:1rem;padding:7px 14px;}
+      .status-btn{font-size:0.97rem;padding:7px 10px;}
+    }
+  </style>
+</head>
+<body>
+  <div id="loginPanel">
+    <h3>Admin Login</h3>
+    <form id="loginForm">
+      <label>Username: <input type="text" id="username" required></label><br><br>
+      <label>Password: <input type="password" id="password" required></label><br><br>
+      <button type="submit">Login</button>
+      <span id="loginMsg" style="color:red; font-size:0.9em;"></span>
+    </form>
+  </div>
+  <div class="container">
+    <button id="logoutBtn" style="display:inline-block;">Logout</button>
+    <h1>Attendance Sheet (Admin Only)</h1>
+    <div class="attendance-bar">
+      <label for="date">Attendance Date:
+        <input type="date" id="date" required>
+      </label>
+      <button id="saveBtn">Save Attendance</button>
+      <button class="export-btn" onclick="downloadCsv(event)">
+        Download Attendance (CSV)
+      </button>
+    </div>
+    <div style="margin:14px 0 13px 0; border:1px solid #dfe6e9; border-radius:5px; padding:12px;">
+      <b>Filter Attendance Records</b>
+      <form id="filterForm" style="display:inline-block; margin-left:18px;">
+        <label>Date:
+          <input type="date" id="filterDate">
+        </label>
+        <label style="margin-left:15px;">Reg. Number:
+          <input type="text" id="filterStudent" placeholder="e.g. 23KD1A05D3" style="width:120px;">
+        </label>
+        <button type="submit">Search</button>
+      </form>
+    </div>
+    <div id="filterResults"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Reg. Number</th><th>Name</th><th>Status (Touch to select)</th>
+        </tr>
+      </thead>
+      <tbody id="attendanceTable"></tbody>
+    </table>
+    <div style="margin-top:15px;padding-bottom:7px;font-size:0.95em;color:#636e72">
+      <em>Set status by tapping buttons.<br>
+      Use the filter to view records by date or student. Download to Excel anytime.</em>
+    </div>
+  </div>
+  <script>
+    let students = [];
+    let attendanceData = [];
+    let isAdmin = false;
+
+    // Handle Login
+    document.getElementById('loginForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const resp = await fetch('/admin/login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username, password})
+      });
+      const result = await resp.json();
+      if (result.ok) {
+        isAdmin = true;
+        document.getElementById('loginPanel').style.display = 'none';
+        document.querySelector('.container').style.display = 'block';
+        fetchStudentsList();
+      } else {
+        document.getElementById('loginMsg').innerText = 'Invalid login!';
+      }
+    });
+
+    // Logout
+    document.getElementById('logoutBtn').addEventListener('click', async function() {
+      await fetch('/admin/logout', { method: "POST" });
+      isAdmin = false;
+      document.querySelector('.container').style.display = 'none';
+      document.getElementById('loginPanel').style.display = 'block';
+      document.getElementById('loginMsg').innerText = '';
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+    });
+
+    // Load students from backend
+    async function fetchStudentsList() {
+      try {
+        const resp = await fetch("/students");
+        students = await resp.json();
+        attendanceData = students.map(s => ({
+          student_id: s.student_id,
+          name: s.name,
+          status: 'Present'
+        }));
+        renderAttendanceSheet();
+      } catch {
+        alert("Error fetching students from server. Please check backend.");
+      }
+    }
+
+    // Set tomorrow's date as default
+    window.onload = () => {
+      document.querySelector('.container').style.display = 'none';
+      document.getElementById('loginPanel').style.display = 'block';
+      const tomorrow = new Date(Date.now() + 86400000);
+      document.getElementById('date').value = tomorrow.toISOString().slice(0, 10);
+    };
+
+    function renderAttendanceSheet() {
+      const tbody = document.getElementById('attendanceTable');
+      tbody.innerHTML = '';
+      attendanceData.forEach((rec, idx) => {
+        tbody.innerHTML += `
+          <tr class="c${idx%2}">
+            <td>${rec.student_id}</td>
+            <td>${rec.name}</td>
+            <td>
+              <button type="button" class="status-btn status-present${rec.status==='Present'?' status-selected':''}" data-row="${idx}" data-status="Present">Present</button>
+              <button type="button" class="status-btn status-absent${rec.status==='Absent'?' status-selected':''}" data-row="${idx}" data-status="Absent">Absent</button>
+              <button type="button" class="status-btn status-late${rec.status==='Late'?' status-selected':''}" data-row="${idx}" data-status="Late">Late</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    // Mark status by touch
+    document.getElementById('attendanceTable').addEventListener('click', function(e){
+      if(!isAdmin) return;
+      if(e.target.classList.contains('status-btn')){
+        const idx = +e.target.getAttribute('data-row');
+        const newStatus = e.target.getAttribute('data-status');
+        attendanceData[idx].status = newStatus;
+        renderAttendanceSheet();
+      }
+    });
+
+    // Save attendance
+    document.getElementById('saveBtn').addEventListener('click', async function(){
+      if(!isAdmin) return;
+      const date = document.getElementById('date').value;
+      let ok=0, skip=0, fail=0;
+      for(const rec of attendanceData){
+        try{
+          const resp = await fetch("/attendance",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({student_id:rec.student_id,date:date,status:rec.status})
+          });
+          const r = await resp.json();
+          if(resp.ok) ok++;
+          else if (r && r.error && r.error.includes('already')) skip++;
+          else fail++;
+        }catch{
+          fail++;
+        }
+      }
+      alert(`Attendance for ${date} saved!\nSuccess: ${ok}\nAlready marked: ${skip}\nFailed: ${fail}`);
+    });
+
+    // Download CSV
+    function downloadCsv(e) {
+      e.preventDefault();
+      fetch("/attendance/export")
+        .then(resp => {
+          if (!resp.ok) return resp.json().then(r => { throw new Error(r.error || "Unauthorized"); });
+          return resp.blob();
+        })
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "attendance_export.csv";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        })
+        .catch(err => alert("Export failed: " + err.message));
+    };
+
+    // Filter attendance records
+    document.getElementById('filterForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const date = document.getElementById('filterDate').value;
+      const student_id = document.getElementById('filterStudent').value.trim();
+      let url = '/attendance/filter?';
+      if(date) url += 'date=' + date + '&';
+      if(student_id) url += 'student_id=' + student_id;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      let out = '<table><tr><th>Date</th><th>Reg. Number</th><th>Name</th><th>Status</th></tr>';
+      if(data.length===0) out += '<tr><td colspan="4" style="text-align:center;">No records found.</td></tr>';
+      data.forEach(r=>{
+        out += `<tr>
+          <td>${r.date}</td>
+          <td>${r.student_id}</td>
+          <td>${r.name}</td>
+          <td style="font-weight:bold;color:${r.status==='Present'?'#00b894':r.status==='Absent'?'#e74c3c':'#fdcb6e'};">${r.status}</td>
+        </tr>`;
+      });
+      out += '</table>';
+      document.getElementById('filterResults').innerHTML = out;
+    });
+  </script>
+</body>
+</html>
